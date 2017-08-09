@@ -34,7 +34,7 @@ csv_path = 'train.csv'
 bz.odo(csv_path, 'sqlite:///data.db::data')
 
 #using pandas to read 300,000 sample rows created from sqlite db out of 8 million rows
-data_df=pd.read_csv('train_150k.csv','r',delimiter=',')
+data_df=pd.read_csv('train_300k.csv','r',delimiter=',')
 #data_df=data_df.drop(['id'],1)
 data_df.info()
 '''
