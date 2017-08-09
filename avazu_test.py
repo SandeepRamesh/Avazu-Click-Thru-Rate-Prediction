@@ -15,13 +15,26 @@ import matplotlib.pyplot as plt
 from pandas.tools.plotting import scatter_matrix
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import RFECV
+from sklearn.metrics import f1_score
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, AdaBoostClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
+
 
 #using Odo to convert csv data to sqlite db
 csv_path = 'train.csv'
 bz.odo(csv_path, 'sqlite:///data.db::data')
 
-#using pandas to read sample rows created from sqlite db
-data_df=pd.read_csv('train_100k.csv','r',delimiter=',')
+#using pandas to read 300,000 sample rows created from sqlite db out of 8 million rows
+data_df=pd.read_csv('train_150k.csv','r',delimiter=',')
 #data_df=data_df.drop(['id'],1)
 data_df.info()
 '''
@@ -120,6 +133,7 @@ data_df.groupby('app_id')['click'].mean().sort_values()
 data_df['app_id']=data_df.app_id.replace(to_replace=['c','f','4','3','1','5','8','b','d','0','2','6'],value=0)
 data_df['app_id']=data_df.app_id.replace(to_replace=['e','9'],value=1)
 data_df['app_id']=data_df.app_id.replace(to_replace=['7','a'],value=2)
+sns.factorplot(x='app_id',y='click',data=data_df)
 data_df.app_id=data_df.app_id.astype('category')
 
 #Feature app_domain
@@ -136,14 +150,15 @@ data_df.app_domain=data_df.app_domain.astype('category')
 data_df.app_category=data_df.app_category.map(lambda x:x[0])
 data_df.groupby('app_category')['click'].mean().sort_values()
 data_df['app_category']=data_df.app_category.replace(to_replace=['2','7','d','8','a','c','4'],value=0)
-data_df['app_category']=data_df.app_category.replace(to_replace=['0','f'],value=1)
+data_df['app_category']=data_df.app_category.replace(to_replace=['0','f','1'],value=1)
+sns.factorplot(x='app_category',y='click',data=data_df)
 data_df.app_category=data_df.app_category.astype('category')
 
 #Feature Device ID
 data_df.device_id=data_df.device_id.map(lambda x:x[0])
 data_df.groupby('device_id')['click'].mean().sort_values()
-data_df['device_id']=data_df.device_id.replace(to_replace=['8','e','2','6','5','7','9','b','4','3','0','a'],value=0)
-data_df['device_id']=data_df.device_id.replace(to_replace=['1','d','f'],value=1)
+data_df['device_id']=data_df.device_id.replace(to_replace=['f','8','e','2','6','5','7','9','b','4','3','0','1','d'],value=0)
+data_df['device_id']=data_df.device_id.replace(to_replace=['a'],value=1)
 data_df['device_id']=data_df.device_id.replace(to_replace=['c'],value=2)
 sns.factorplot(x='device_id',y='click',data=data_df)
 data_df.device_id=data_df.device_id.astype('category')
@@ -151,9 +166,10 @@ data_df.device_id=data_df.device_id.astype('category')
 #Feature Device IP
 data_df.device_ip=data_df.device_ip.map(lambda x:x[0])
 data_df.groupby('device_ip')['click'].mean().sort_values()
-data_df['device_ip']=data_df.device_ip.replace(to_replace=['e','c','3','2','4','d','5','9'],value=0)
+data_df['device_ip']=data_df.device_ip.replace(to_replace=['e','c','3','2','4','D','d','5','9'],value=0)
 data_df['device_ip']=data_df.device_ip.replace(to_replace=['0','b','f','a','6','7'],value=1)
 data_df['device_ip']=data_df.device_ip.replace(to_replace=['1','8'],value=2)
+sns.factorplot(x='device_ip',y='click',data=data_df)
 data_df.device_ip=data_df.device_ip.astype('category')
 
 #Feature Device Model
@@ -167,6 +183,7 @@ data_df.device_model=data_df.device_model.astype('category')
 #Feature Device Type
 data_df.groupby('device_type')['click'].mean().plot(kind='bar')
 data_df.device_type=data_df.device_type.astype('category')
+sns.factorplot(x='device_type',y='click',data=data_df)
 
 #Feature Device conn Type
 sns.factorplot(x='device_conn_type',y='click',data=data_df)
@@ -183,9 +200,11 @@ data_df.groupby('C16')['click'].mean().sort_values()
 data_df['C16']=data_df.C16.replace(to_replace=[90,36,50],value=0)
 data_df['C16']=data_df.C16.replace(to_replace=[480,320,1024,250,768],value=1)
 data_df.C16=data_df.C16.astype('category')
+sns.factorplot(x='C16',y='click',data=data_df)
 
 #Feature C18 to category
 data_df.C18=data_df.C18.astype('category')
+sns.factorplot(x='C18',y='click',data=data_df)
 
 #Scaling certain features to mean 0 and std dev 1
 scaler = StandardScaler()
@@ -197,12 +216,10 @@ for col in ['C14','C17','C19','C20','C21']:
 x=data_df.drop(['id','click'],1)
 y=data_df['click']
 
-#using train test split to get training and test data
+#using train test split to get 80% training and 20% test data
 x_train, x_test, y_train, y_test = train_test_split(x,y,random_state=42,test_size=0.2)
 
 #Recursive feature elimination to select the optimal number of features
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import RFECV
 regressor = RandomForestClassifier(n_estimators=200)
 rfecv = RFECV(estimator=regressor, step=1, cv=10)
 rfecv.fit(x_train, y_train)
@@ -229,18 +246,9 @@ new_xtest=x_test[newfeatures]
 new_ytest=y_test
 
 
-from sklearn.metrics import f1_score
-from sklearn.metrics import confusion_matrix
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.naive_bayes import GaussianNB
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
-
-
+#List of classifiers to be used for Model selection and validation
 names = ["Extra Trees", "Random Forest", "KNeighbors","Logistic",
-         "Naive Bayes", "Decision Tree","Support Vector Machine"]
+         "Naive Bayes", "Decision Tree","AdaBoost"]
 classifiers = [
     ExtraTreesClassifier(n_estimators=200,criterion = 'entropy'),
     RandomForestClassifier(n_estimators=200,criterion = 'entropy'),
@@ -248,23 +256,73 @@ classifiers = [
     LogisticRegression(),
     GaussianNB(),
     DecisionTreeClassifier(criterion='entropy'),
-    SVC(kernel = 'rbf')
+    AdaBoostClassifier(n_estimators=200)
 ]
 
+
+#Model training and to validate using F1 score, Accuracy, AUC score 
+#Plotting of ROC Curve to choose the best classifier
 i=0
-results=[]
+f1_results=[]
+acc_results=[]
+auc_results=[]
 for classifier in classifiers:
     print(names[i])
     classifier.fit(new_xtrain, new_ytrain)
     y_pred = classifier.predict(new_xtest)
-    print("F1 Score:",f1_score(new_ytest,y_pred))
-    score=f1_score(new_ytest,y_pred)
-    results.append(score)
- 
+    y_pred_prob = classifier.predict_proba(new_xtest)[:, 1]
+    f1score=f1_score(new_ytest,y_pred)
+    accuracy=accuracy_score(new_ytest,y_pred)
+    auc_score=roc_auc_score(new_ytest, y_pred_prob)
+    print("F1 Score:",f1score)
+    print("Accuracy Score:",accuracy)
+    print("ROC AUC Score:",auc_score) 
+    f1_results.append(f1score)
+    acc_results.append(accuracy)
+    auc_results.append(auc_score)
+    
+    #To plot ROC Curve to select the best performing classifier
+    fpr, tpr, thresholds = roc_curve(new_ytest, y_pred_prob)
+    plt.plot(fpr, tpr,label=names[i])
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.0])
+    plt.rcParams['font.size'] = 12
+    plt.title('ROC curve for all classifiers')
+    plt.xlabel('False Positive Rate (1 - Specificity)')
+    plt.ylabel('True Positive Rate (Sensitivity)')
+    plt.legend(loc='best')
+    plt.grid(True)
+    i+=1
 
-
-
-
-
-
-
+#Magnified ROC Curve
+i=0
+f1_results=[]
+acc_results=[]
+auc_results=[]
+for classifier in classifiers:
+    print(names[i])
+    classifier.fit(new_xtrain, new_ytrain)
+    y_pred = classifier.predict(new_xtest)
+    y_pred_prob = classifier.predict_proba(new_xtest)[:, 1]
+    f1score=f1_score(new_ytest,y_pred)
+    accuracy=accuracy_score(new_ytest,y_pred)
+    auc_score=roc_auc_score(new_ytest, y_pred_prob)
+    print("F1 Score:",f1score)
+    print("Accuracy Score:",accuracy)
+    print("ROC AUC Score:",auc_score) 
+    f1_results.append(f1score)
+    acc_results.append(accuracy)
+    auc_results.append(auc_score)
+    
+    #To plot ROC Curve to select the best performing classifier
+    fpr, tpr, thresholds = roc_curve(new_ytest, y_pred_prob)
+    plt.plot(fpr, tpr,label=names[i])
+    plt.xlim([0.2, 0.8])
+    plt.ylim([0.2, 0.8])
+    plt.rcParams['font.size'] = 12
+    plt.title('ROC curve for all classifiers(Magnified)')
+    plt.xlabel('False Positive Rate (1 - Specificity)')
+    plt.ylabel('True Positive Rate (Sensitivity)')
+    plt.legend(loc='best')
+    plt.grid(True)
+    i+=1
